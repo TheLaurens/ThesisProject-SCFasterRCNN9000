@@ -48,8 +48,12 @@ LOG="experiments/logs/faster_rcnn_end2end_${NET}_${EXTRA_ARGS_SLUG}.txt.`date +'
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
+echo If this next thing isnt what I want this went wrong
+echo ${TRAIN_IMDB}
+
 time python ./tools/train_net.py --device ${DEV} --device_id ${DEV_ID} \
-  --weights data/pretrain_model/VGG_imagenet.npy \
+  #--weights data/pretrain_model/VGG_imagenet.npy \
+  --weights ${NET}
   --imdb ${TRAIN_IMDB} \
   --iters ${ITERS} \
   --cfg experiments/cfgs/faster_rcnn_end2end.yml \
