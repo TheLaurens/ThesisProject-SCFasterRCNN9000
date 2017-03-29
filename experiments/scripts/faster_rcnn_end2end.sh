@@ -2,6 +2,7 @@
 # Usage:
 # ./experiments/scripts/faster_rcnn_end2end.sh GPU NET DATASET [options args to {train,test}_net.py]
 # DATASET is either pascal_voc or coco.
+# 
 #
 # Example:
 # ./experiments/scripts/faster_rcnn_end2end.sh 0 VGG_CNN_M_1024 pascal_voc \
@@ -48,12 +49,10 @@ LOG="experiments/logs/faster_rcnn_end2end_${NET}_${EXTRA_ARGS_SLUG}.txt.`date +'
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
-echo If this next thing isnt what I want this went wrong
-echo ${TRAIN_IMDB}
+echo Selected dataset : "${TRAIN_IMDB}"
 
 time python ./tools/train_net.py --device ${DEV} --device_id ${DEV_ID} \
-  #--weights data/pretrain_model/VGG_imagenet.npy \
-  --weights ${NET}
+  --weights ${NET} \
   --imdb ${TRAIN_IMDB} \
   --iters ${ITERS} \
   --cfg experiments/cfgs/faster_rcnn_end2end.yml \

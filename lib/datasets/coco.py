@@ -17,6 +17,7 @@ import cPickle
 import json
 import uuid
 # COCO API
+sys.path.append('//coco/PythonAPI/')
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from pycocotools import mask as COCOmask
@@ -59,12 +60,14 @@ class coco(imdb):
         self._COCO = COCO(self._get_ann_file())
         cats = self._COCO.loadCats(self._COCO.getCatIds())
         self._classes = tuple(['__background__'] + [c['name'] for c in cats])
+        print(self._classes)
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._class_to_coco_cat_id = dict(zip([c['name'] for c in cats],
                                               self._COCO.getCatIds()))
         self._image_index = self._load_image_set_index()
         # Default to roidb handler
-        self.set_proposal_method('selective_search')
+        #self.set_proposal_method('selective_search')
+        self._roidb_handler = self.gt_roidb
         self.competition_mode(False)
 
         # Some image sets are "views" (i.e. subsets) into others.

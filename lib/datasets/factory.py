@@ -9,6 +9,7 @@
 
 __sets = {}
 
+from datasets.coco import coco
 import datasets.pascal_voc
 import datasets.imagenet3d
 import datasets.kitti
