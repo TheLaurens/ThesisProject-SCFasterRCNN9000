@@ -16,6 +16,7 @@ from fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
 import matplotlib.pyplot as plt
 from tensorflow.python.client import timeline
 import time
+import csv
 
 def _get_image_blob(im):
     """Converts an image into a network input.
@@ -173,7 +174,7 @@ def im_detect(sess, net, im, boxes=None):
         run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         run_metadata = tf.RunMetadata()
 
-    cls_score, cls_prob, bbox_pred, rois = sess.run([net.get_output('cls_score'), net.get_output('cls_prob'), net.get_output('bbox_pred'),net.get_output('rois')],
+    features_fc7, patches_pool5, cls_score, cls_prob, bbox_pred, rois = sess.run([net.get_output('fc7'), net.get_output('pool_5'), net.get_output('cls_score'), net.get_output('cls_prob'), net.get_output('bbox_pred'),net.get_output('rois')],
                                                     feed_dict=feed_dict,
                                                     options=run_options,
                                                     run_metadata=run_metadata)
@@ -211,7 +212,7 @@ def im_detect(sess, net, im, boxes=None):
         trace_file.write(trace.generate_chrome_trace_format(show_memory=False))
         trace_file.close()
 
-    return scores, pred_boxes
+    return scores, pred_boxes, features_fc7, patches_pool5
 
 
 def vis_detections(im, class_name, dets, thresh=0.8):
@@ -269,7 +270,7 @@ def apply_nms(all_boxes, thresh):
     return nms_boxes
 
 
-def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05, vis=False):
+def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05, vis=False, save_features=False):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
     # all detections are collected into:
@@ -279,6 +280,16 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
                  for _ in xrange(imdb.num_classes)]
 
     output_dir = get_output_dir(imdb, weights_filename)
+
+    if save_features:
+        feat_path = os.path.join(output_dir, 'fc7.csv')
+        feat_file = open(feat_path, 'wb')
+        feat_csv = csv.writer(feat_file)
+
+        patch_path = os.path.join(output_dir, 'pool5.csv')
+        patch_file = open(patch_path, 'wb')
+        patch_csv = csv.writer(patch_file)
+
     # timers
     _t = {'im_detect' : Timer(), 'misc' : Timer()}
 
@@ -299,10 +310,22 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
 
         im = cv2.imread(imdb.image_path_at(i))
         _t['im_detect'].tic()
-        scores, boxes = im_detect(sess, net, im, box_proposals)
+        scores, boxes, features_fc7, patches_pool5 = im_detect(sess, net, im, box_proposals)
         _t['im_detect'].toc()
 
         _t['misc'].tic()
+
+        if save_features:
+            feat_csv.writerow(features_fc7)
+            patch_csv.writerow(patches_pool5)
+            #feat_file = os.path.join(output_dir, 'fc7.pkl')
+            #with open(feat_file, 'a') as f:
+            #cPickle.dump(all_features, f, cPickle.HIGHEST_PROTOCOL)
+
+            #patch_file = os.path.join(output_dir, 'pool5.pkl')
+            #with open(patch_file, 'a') as f:
+            #cPickle.dump(all_patches, f, cPickle.HIGHEST_PROTOCOL)
+
         if vis:
             image = im[:, :, (2, 1, 0)]
             plt.cla()
@@ -343,4 +366,3 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
 
     print 'Evaluating detections'
     imdb.evaluate_detections(all_boxes, output_dir)
-

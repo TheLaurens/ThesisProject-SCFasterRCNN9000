@@ -54,7 +54,6 @@ __C.IS_MULTISCALE = False
 #__C.TRAIN.ASPECTS = (1, 0.75, 0.5, 0.25)
 #__C.TRAIN.ASPECTS= (1,)
 
-
 # Scales to use during training (can list multiple scales)
 # Each scale is the pixel size of an image's shortest side
 __C.TRAIN.SCALES = (600,)
