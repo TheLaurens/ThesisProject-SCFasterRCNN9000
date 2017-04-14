@@ -188,13 +188,13 @@ class Network(object):
 
             rois,labels,bbox_targets,bbox_inside_weights,bbox_outside_weights = tf.py_func(proposal_target_layer_py,[input[0],input[1],classes],[tf.float32,tf.float32,tf.float32,tf.float32,tf.float32])
 
-            rois = tf.reshape(rois,[-1,5] , name = 'rois') 
+            rois = tf.reshape(rois,[-1,5] , name = 'rois')
             labels = tf.convert_to_tensor(tf.cast(labels,tf.int32), name = 'labels')
             bbox_targets = tf.convert_to_tensor(bbox_targets, name = 'bbox_targets')
             bbox_inside_weights = tf.convert_to_tensor(bbox_inside_weights, name = 'bbox_inside_weights')
             bbox_outside_weights = tf.convert_to_tensor(bbox_outside_weights, name = 'bbox_outside_weights')
 
-           
+
             return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
 
 
@@ -202,8 +202,7 @@ class Network(object):
     def reshape_layer(self, input, d,name):
         input_shape = tf.shape(input)
         if name == 'rpn_cls_prob_reshape':
-             return tf.transpose(tf.reshape(tf.transpose(input,[0,3,1,2]),[input_shape[0],
-                    int(d),tf.cast(tf.cast(input_shape[1],tf.float32)/tf.cast(d,tf.float32)*tf.cast(input_shape[3],tf.float32),tf.int32),input_shape[2]]),[0,2,3,1],name=name)
+             return tf.transpose(tf.reshape(tf.transpose(input,[0,3,1,2]),[input_shape[0], int(d),tf.cast(tf.cast(input_shape[1],tf.float32)/tf.cast(d,tf.float32)*tf.cast(input_shape[3],tf.float32),tf.int32),input_shape[2]]),[0,2,3,1],name=name)
         else:
              return tf.transpose(tf.reshape(tf.transpose(input,[0,3,1,2]),[input_shape[0],
                     int(d),tf.cast(tf.cast(input_shape[1],tf.float32)*(tf.cast(input_shape[3],tf.float32)/tf.cast(d,tf.float32)),tf.int32),input_shape[2]]),[0,2,3,1],name=name)
@@ -270,3 +269,37 @@ class Network(object):
     @layer
     def dropout(self, input, keep_prob, name):
         return tf.nn.dropout(input, keep_prob, name=name)
+
+    @layer
+    def acol(self,input,clust_count,name):
+        if isinstance(input, tuple):
+                input = input[0]
+        
+        #I don't know what this bit does, but I don't think it'll hurt anything
+        input_shape = input.get_shape()
+        if input_shape.ndims == 4:
+            dim = 1
+            for d in input_shape[1:].as_list():
+                dim *= d
+            feed_in = tf.reshape(tf.transpose(input,[0,3,1,2]), [-1, dim])
+        else:
+            feed_in, dim = (input, int(input_shape[-1]))
+
+        init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
+        init_biases = tf.constant_initializer(0.1)
+
+        weights = self.make_var('weights', [dim, num_out], init_weights)
+        biases = self.make_var('biases', [num_out], init_biases)
+        
+        acol = tf.nn.xw_plus_b(input,weights,biases,name=name)
+        return acol
+    
+    @layer
+    def matrix_softmax(self,input,name):
+        shape = input.get_shape().as_list()
+        shape[0] = int(-1)
+        return tf.reshape(tf.nn.softmax(tf.contrib.layers.flatten(x)),shape,name=name)
+        
+    @layer
+    def redMax(self,input,name):
+        tf.reduce_max(input,2,name=name)

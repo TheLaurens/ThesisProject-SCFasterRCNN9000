@@ -315,9 +315,8 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
 
         _t['misc'].tic()
 
-        if save_features:
-            feat_csv.writerow(features_fc7)
-            patch_csv.writerow(patches_pool5)
+            #for p in patches_pool5:
+            #    patch_csv.writerow(p)
             #feat_file = os.path.join(output_dir, 'fc7.pkl')
             #with open(feat_file, 'a') as f:
             #cPickle.dump(all_features, f, cPickle.HIGHEST_PROTOCOL)
@@ -340,6 +339,17 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
                 .astype(np.float32, copy=False)
             keep = nms(cls_dets, cfg.TEST.NMS)
             cls_dets = cls_dets[keep, :]
+
+            if save_features:
+                f = features_fc7[inds,:][keep,:]
+                indx = np.tile(np.array([i,j]),[f.shape[0],1])
+                feat_csv.writerows(np.hstack([indx,f]))
+                #print np.insert(features_fc7[inds,:][keep,:],0,i,axis=1)
+                #for f in features_fc7[inds,:][keep,:]:
+                #    feat_csv.writerow(np.insert(f,0,[i,j]))
+                #    print np.insert(f,0,[i,j])
+                #for p in patches_pool5[keep,:,:]:
+                #    patch_csv.writerow(p)
             if vis:
                 vis_detections(image, imdb.classes[j], cls_dets)
             all_boxes[j][i] = cls_dets
