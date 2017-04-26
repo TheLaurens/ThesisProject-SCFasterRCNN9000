@@ -20,6 +20,8 @@ import sys
 from tensorflow.python.client import timeline
 import time
 
+mnist = input_data.read_data_sets('./MNIST_data', one_hot=True)
+
 class SolverWrapper(object):
     """A simple wrapper around Caffe's solver.
     This wrapper gives us control over he snapshotting process, which we
@@ -74,32 +76,37 @@ class SolverWrapper(object):
         return outside_mul
 
     #helper loss funcs
-    def zBar(x):
+    def zBar(self,x):
         xshape = x.shape.as_list()
+        print '============================================='
+        print xshape
         s=[-1,xshape[1]*xshape[2]]
+        #return tf.reshape(x,s)
         return tf.maximum(tf.reshape(x,s),0)
     
-    def bigU(zb):
+    def bigU(self,zb):
         return tf.matmul(tf.transpose(zb),zb)
 
-    def selectNonDiag(x):
+    def selectNonDiag(self,x):
         selection = np.ones(x.shape.as_list()[0],dtype='float32') - np.eye(x.shape.as_list()[0],dtype='float32')
         return tf.reduce_sum(tf.multiply(x,selection))
 
-    def bigV(x):
+    def bigV(self,x):
         smallNu=tf.reshape(tf.reduce_sum(x,axis=0),[1,-1])
         return tf.multiply(tf.transpose(smallNu),smallNu)
 
-    def specialNormalise(x):
-        top = selectNonDiag(x)
+    def specialNormalise(self,x):
+        top = self.selectNonDiag(x)
         bottom = tf.multiply(tf.to_float(x.shape[1]-1),tf.reduce_sum(tf.multiply(x,np.eye(x.shape[1],dtype='float32'))))
         return tf.divide(top,bottom)
 
-    def frobNorm(x):
+    def frobNorm(self,x):
         return tf.sqrt(tf.reduce_sum(tf.square(x)))
 
     def train_model(self, sess, max_iters):
         """Network training loop."""
+        cfg.TRAIN.LEARNING_RATE = 1e-5
+        y = {0:[0,1], 1:[1,0]}
         tresh = tf.constant(0.03)
         cc0=1.0
         cc1=1.0
@@ -115,30 +122,31 @@ class SolverWrapper(object):
         
         stackedClusts = self.net.get_output('stackedClusts')
         
-        bZ = zBar(stackedClusts)
-        bU = bigU(bZ)
-        coact = selectNonDiag(bU)
-        affinity = specialNormalise(bU)
+        bZ = self.zBar(stackedClusts)
+        bU = self.bigU(bZ)
+        coact = self.selectNonDiag(bU)
+        affinity = self.specialNormalise(bU)
 
         #balance
-        bV=bigV(bZ)
-        balance = specialNormalise(bV)
+        bV=self.bigV(bZ)
+        balance = self.specialNormalise(bV)
 
         #cross entropy
-        cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(tf.clip_by_value(self.net.get_output('smStacked'),1e-10,1.0)), reduction_indices=[1]))
+        cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.net.y_ * tf.log(tf.clip_by_value(self.net.get_output('smStacked'),1e-10,1.0)), reduction_indices=[1]))
 
-        frob = frobNorm(stackedClusts)
+        frob = self.frobNorm(stackedClusts)
 
         loss = c0*cross_entropy + c1*affinity + c2*tf.subtract(tf.constant(1.0),balance) + c3(affinity)*coact + c4*frob
         
         # optimizer and learning rate
         global_step = tf.Variable(0, trainable=False)
-        lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
-                                        cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
-        momentum = cfg.TRAIN.MOMENTUM
-        train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
-        
-        correct_prediction = tf.equal(tf.argmax(self.net.get_output('smStacked'),1), tf.argmax(y_,1))
+        #lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
+        #                                cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
+        #momentum = cfg.TRAIN.MOMENTUM
+        #train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
+        lr = 1e-5
+        train_op = tf.train.AdamOptimizer(lr).minimize(loss)
+        correct_prediction = tf.equal(tf.argmax(self.net.get_output('smStacked'),1), tf.argmax(self.net.y_,1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         
         # iintialize variables
@@ -147,10 +155,10 @@ class SolverWrapper(object):
         timer = Timer()
         for iter in range(max_iters):
             # get one batch
-            trainBatch = mnist.train.next_batch(batchSize)
+            trainbatch = mnist.train.next_batch(128)
             trainbatch = (trainbatch[0],np.array([y[np.argmax(trainbatch[1][j])>4] for j in range(len(trainbatch[1]))]))
             # Make one SGD update
-            feed_dict={self.net.data: trainBatch[0], self.net.y_: trainBatch[1] self.net.keep_prob: 0.5}
+            feed_dict={self.net.data: trainbatch[0], self.net.y_: trainbatch[1], self.net.keep_prob: 0.5}
 
             run_options = None
             run_metadata = None
@@ -160,7 +168,7 @@ class SolverWrapper(object):
 
             timer.tic()
 
-            train_loss, train_acc, _ = sess.run([loss, train_op], feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+            train_loss, train_acc, _ = sess.run([loss,accuracy, train_op], feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
 
             timer.toc()
 
@@ -172,8 +180,16 @@ class SolverWrapper(object):
 
             if (iter+1) % (cfg.TRAIN.DISPLAY) == 0:
                 print 'iter: %d / %d, total loss: %.4f, train_accuracy: %.4f, lr: %f'%\
-                        (iter+1, max_iters, train_loss, train_acc, lr.eval())
+                        (iter+1, max_iters, train_loss, train_acc, lr)#lr.eval())
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
+                #print  self.net.get_output('fc7').eval(feed_dict=feed_dict)
+                aff = affinity.eval(feed_dict=feed_dict)
+                bal = balance.eval(feed_dict=feed_dict)
+                coa = coact.eval(feed_dict=feed_dict)
+                entr = cross_entropy.eval(feed_dict=feed_dict)
+                frb = frob.eval(feed_dict=feed_dict)
+                #print bV.eval(feed_dict=feed_dict)
+                print("cross_entropy: %g, affinity: %g, balance: %g, coact: %g, frob: %g"%(cc0*entr,cc1*aff,cc2*(1-bal),cc3*coa,cc4*frb))
 
             if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
                 last_snapshot_iter = iter

@@ -99,6 +99,33 @@ class SolverWrapper(object):
 
         return outside_mul
 
+        #helper loss funcs
+    def zBar(self,x):
+        xshape = x.shape.as_list()
+        print '============================================='
+        print xshape
+        s=[-1,xshape[1]*xshape[2]]
+        #return tf.reshape(x,s)
+        return tf.maximum(tf.reshape(x,s),0)
+
+    def bigU(self,zb):
+        return tf.matmul(tf.transpose(zb),zb)
+
+    def selectNonDiag(self,x):
+        selection = np.ones(x.shape.as_list()[0],dtype='float32') - np.eye(x.shape.as_list()[0],dtype='float32')
+        return tf.reduce_sum(tf.multiply(x,selection))
+
+    def bigV(self,x):
+        smallNu=tf.reshape(tf.reduce_sum(x,axis=0),[1,-1])
+        return tf.multiply(tf.transpose(smallNu),smallNu)
+
+    def specialNormalise(self,x):
+        top = self.selectNonDiag(x)
+        bottom = tf.multiply(tf.to_float(x.shape[1]-1),tf.reduce_sum(tf.multiply(x,np.eye(x.shape[1],dtype='float32'))))
+        return tf.divide(top,bottom)
+
+    def frobNorm(self,x):
+        return tf.sqrt(tf.reduce_sum(tf.square(x)))
 
     def train_model(self, sess, max_iters):
         """Network training loop."""
@@ -124,9 +151,14 @@ class SolverWrapper(object):
 
         # R-CNN
         # classification loss
-        cls_score = self.net.get_output('cls_score')
+        #cls_score = self.net.get_output('cls_score')
+        #label = tf.reshape(self.net.get_output('roi-data')[1],[-1])
+        #cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
+
+        # classification loss ACOL
+        smStacked = self.net.get_output('smStacked')
         label = tf.reshape(self.net.get_output('roi-data')[1],[-1])
-        cross_entropy = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
+        cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.one_hot(label, self.imdb.num_classes,dtype='float32') * tf.log(tf.clip_by_value(smStacked,1e-10,1.0)), reduction_indices=[1]))
 
         # bounding box regression L1 loss
         bbox_pred = self.net.get_output('bbox_pred')
@@ -137,15 +169,43 @@ class SolverWrapper(object):
         smooth_l1 = self._modified_smooth_l1(1.0, bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
         loss_box = tf.reduce_mean(tf.reduce_sum(smooth_l1, reduction_indices=[1]))
 
+        #ACOL loss
+        tresh = tf.constant(0.03)
+        cc1=1.0
+        cc2=1.0
+        cc3=0.0003
+        cc4=0.000001
+        c1 = tf.constant(cc1)
+        c2 = tf.constant(cc2)
+        c3val = tf.constant(cc3)
+        c3 = lambda affinity: tf.cond(tf.less(affinity,tresh),lambda: c3val,lambda: tf.constant(0.0))
+        c4 =tf.constant(cc4)
+
+        stackedClusts = self.net.get_output('stackedClusts')
+
+        bZ = self.zBar(stackedClusts)
+        bU = self.bigU(bZ)
+        coact = self.selectNonDiag(bU)
+        affinity = self.specialNormalise(bU)
+
+        #balance
+        bV=self.bigV(bZ)
+        balance = self.specialNormalise(bV)
+
+        frob = self.frobNorm(stackedClusts)
+
         # final loss
-        loss = cross_entropy + loss_box + rpn_cross_entropy + rpn_loss_box
+        loss = cross_entropy + loss_box + rpn_cross_entropy + rpn_loss_box + c1*affinity + c2*tf.subtract(tf.constant(1.0),balance) + c3(affinity)*coact + c4*frob
 
         # optimizer and learning rate
         global_step = tf.Variable(0, trainable=False)
+        cfg.TRAIN.LEARNING_RATE = 1e-4
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
         train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
+
+        train_op = tf.train.AdamOptimizer(1e-5).minimize(loss)
 
         # iintialize variables
         sess.run(tf.global_variables_initializer())
@@ -186,8 +246,15 @@ class SolverWrapper(object):
                 trace_file.close()
 
             if (iter+1) % (cfg.TRAIN.DISPLAY) == 0:
+                print('==================================================')
                 print 'iter: %d / %d, total loss: %.4f, rpn_loss_cls: %.4f, rpn_loss_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %f'%\
                         (iter+1, max_iters, rpn_loss_cls_value + rpn_loss_box_value + loss_cls_value + loss_box_value ,rpn_loss_cls_value, rpn_loss_box_value,loss_cls_value, loss_box_value, lr.eval())
+                aff = affinity.eval(feed_dict=feed_dict)
+                bal = balance.eval(feed_dict=feed_dict)
+                coa = coact.eval(feed_dict=feed_dict)
+                entr = cross_entropy.eval(feed_dict=feed_dict)
+                frb = frob.eval(feed_dict=feed_dict)
+                print("affinity: %g, balance: %g, coact: %g, frob: %g"%(cc1*aff,cc2*(1-bal),cc3*coa,cc4*frb))
                 print 'speed: {:.3f}s / iter'.format(timer.average_time)
 
             if (iter+1) % cfg.TRAIN.SNAPSHOT_ITERS == 0:
@@ -253,13 +320,15 @@ def filter_roidb(roidb):
                                                        num, num_after)
     return filtered_roidb
 
+def find_loadable_vars():
+    pass
 
 def train_net(network, imdb, roidb, output_dir, pretrained_model=None, max_iters=40000):
     """Train a Fast R-CNN network."""
     roidb = filter_roidb(roidb)
-    saver = tf.train.Saver(max_to_keep=100)
+    restoreSaver = tf.train.Saver(max_to_keep=100)
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-        sw = SolverWrapper(sess, saver, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
+        sw = SolverWrapper(sess, restoreSaver, network, imdb, roidb, output_dir, pretrained_model=pretrained_model)
         print 'Solving...'
         sw.train_model(sess, max_iters)
         print 'done solving'

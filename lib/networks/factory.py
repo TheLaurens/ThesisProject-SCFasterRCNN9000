@@ -12,6 +12,8 @@ __sets = {}
 import networks.VGGnet_train
 import networks.VGGnet_test
 import networks.ACOLmnistTrain
+import networks.VGGnet_ACOL_train
+import networks.VGGnet_ACOL_test
 import pdb
 import tensorflow as tf
 
@@ -25,12 +27,18 @@ def get_network(name):
     #if not __sets.has_key(name):
     #    raise KeyError('Unknown dataset: {}'.format(name))
     #return __sets[name]
-    if name.split('_')[1] == 'test':
-        return networks.VGGnet_test()
-    elif name.split('_')[1] == 'train':
-        return networks.VGGnet_train()
-    elif name == 'mnistnet':
+    if name == 'mnistnet':
         return networks.ACOLmnistTrain()
+    elif name.split('_')[2] == 'test':
+        if name.split('_')[1] == 'ACOL':
+            return networks.VGGnet_ACOL_test()
+        else:
+            return networks.VGGnet_test()
+    elif name.split('_')[2] == 'train':
+        if name.split('_')[1] == 'ACOL':
+            return networks.VGGnet_ACOL_train()
+        else:
+            return networks.VGGnet_train()
     else:
         raise KeyError('Unknown dataset: {}'.format(name))
 

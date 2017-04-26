@@ -50,7 +50,13 @@ def parse_args():
     parser.add_argument('--save_features', dest='save_features',
                         help='Whether or not to store the features in a file',
                         default=False, type=bool)
-
+    parser.add_argument('--save_clusters', dest='save_clusters',
+                        help='Whether or not to store the clusters in a file',
+                        default=False, type=bool)
+    parser.add_argument('--small', dest='small',
+                        help='only use first 100 validation images',
+                        default=False, type=bool)
+    
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -70,18 +76,18 @@ if __name__ == '__main__':
     print('Using config:')
     pprint.pprint(cfg)
 
-   # while not os.path.exists(args.model) and args.wait:
-   #     print('Waiting for {} to exist...'.format(args.model))
-   #     time.sleep(10)
+    # while not os.path.exists(args.model) and args.wait:
+    #     print('Waiting for {} to exist...'.format(args.model))
+    #     time.sleep(10)
 
-   # weights_filename = os.path.splitext(os.path.basename(args.model))[0]
+    # weights_filename = os.path.splitext(os.path.basename(args.model))[0]
 
-    imdb = get_imdb(args.imdb_name)
+    imdb = get_imdb(args.imdb_name,args.small)
     imdb.competition_mode(args.comp_mode)
 
     save_features = args.save_features
 
-   # Find the checkpoint directory, or wait until it exists.
+    # Find the checkpoint directory, or wait until it exists.
     checkpoint_dir = os.path.dirname(args.model)
     print('Looking for checkpoint at: ',checkpoint_dir)
     while True:
@@ -115,4 +121,4 @@ if __name__ == '__main__':
     saver.restore(sess, args.model)
     print ('Loading model weights from {:s}').format(args.model)
 
-    test_net(sess, network, imdb, weights_filename,save_features=save_features)
+    test_net(sess, network, imdb, weights_filename,save_features=save_features,store_clusters=args.save_clusters)

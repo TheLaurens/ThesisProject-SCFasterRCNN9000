@@ -6,8 +6,6 @@ from rpn_msr.proposal_layer_tf import proposal_layer as proposal_layer_py
 from rpn_msr.anchor_target_layer_tf import anchor_target_layer as anchor_target_layer_py
 from rpn_msr.proposal_target_layer_tf import proposal_target_layer as proposal_target_layer_py
 
-
-
 DEFAULT_PADDING = 'SAME'
 
 def layer(op):
@@ -43,7 +41,18 @@ class Network(object):
 
     def load(self, data_path, session, saver, ignore_missing=False):
         if data_path.endswith('.ckpt'):
-            saver.restore(session, data_path)
+            if not ignore_missing:
+                saver.restore(session, data_path)
+            else:
+                reader = tf.train.NewCheckpointReader(data_path)
+                restore_dict = dict()
+                for v in tf.global_variables():
+                    tensor_name = v.name.split(':')[0]
+                    if reader.has_tensor(tensor_name) and not tensor_name == 'bbox_pred/weights' and not tensor_name == 'bbox_pred/biases':
+                        print('has tensor ', tensor_name)
+                        restore_dict[tensor_name] = v
+                saver = tf.train.Saver(restore_dict)
+                saver.restore(session,data_path)
         else:
             data_dict = np.load(data_path).item()
             for key in data_dict:
@@ -100,8 +109,8 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name) as scope:
 
-            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
-            init_biases = tf.constant_initializer(0.0)
+            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1) #NOTE!!:(0.0, stddev=0.01)
+            init_biases = tf.constant_initializer(1.0)#NOTE!!:(0.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
             biases = self.make_var('biases', [c_o], init_biases, trainable)
 
@@ -208,6 +217,10 @@ class Network(object):
                     int(d),tf.cast(tf.cast(input_shape[1],tf.float32)*(tf.cast(input_shape[3],tf.float32)/tf.cast(d,tf.float32)),tf.int32),input_shape[2]]),[0,2,3,1],name=name)
 
     @layer
+    def reshape_noFluff(self, input, newShape, name):
+        return tf.reshape(input, newShape, name=name)
+
+    @layer
     def feature_extrapolating(self, input, scales_base, num_scale_base, num_per_octave, name):
         return feature_extrapolating_op.feature_extrapolating(input,
                               scales_base,
@@ -226,7 +239,12 @@ class Network(object):
 
     @layer
     def concat(self, inputs, axis, name):
-        return tf.concat(concat_dim=axis, values=inputs, name=name)
+        return tf.concat(axis=axis, values=inputs, name=name)
+
+    @layer
+    def stck(self, inputs, axis, name):
+        print inputs
+        return tf.stack(inputs,axis, name=name)
 
     @layer
     def fc(self, input, num_out, name, relu=True, trainable=True):
@@ -245,11 +263,11 @@ class Network(object):
                 feed_in, dim = (input, int(input_shape[-1]))
 
             if name == 'bbox_pred':
-                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)
-                init_biases = tf.constant_initializer(0.0)
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.001)
+                init_biases = tf.constant_initializer(1.0)#(0.0)
             else:
-                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
-                init_biases = tf.constant_initializer(0.0)
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.01)
+                init_biases = tf.constant_initializer(1.0)#(0.0)
 
             weights = self.make_var('weights', [dim, num_out], init_weights, trainable)
             biases = self.make_var('biases', [num_out], init_biases, trainable)
@@ -271,35 +289,41 @@ class Network(object):
         return tf.nn.dropout(input, keep_prob, name=name)
 
     @layer
-    def acol(self,input,clust_count,name):
-        if isinstance(input, tuple):
-                input = input[0]
-        
-        #I don't know what this bit does, but I don't think it'll hurt anything
-        input_shape = input.get_shape()
-        if input_shape.ndims == 4:
-            dim = 1
-            for d in input_shape[1:].as_list():
-                dim *= d
-            feed_in = tf.reshape(tf.transpose(input,[0,3,1,2]), [-1, dim])
-        else:
-            feed_in, dim = (input, int(input_shape[-1]))
+    def acol(self,input,clust_count, class_count,name):
+        acolLayers = []
+        for i in range(class_count):
+            newname = name+'_'+str(i)
+            with tf.variable_scope(newname) as scope:
+                if isinstance(input, tuple):
+                        input = input[0]
 
-        init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)
-        init_biases = tf.constant_initializer(0.1)
+                #I don't know what this bit does, but I don't think it'll hurt anything
+                #Or maybe it does, who knows
+                input_shape = input.get_shape()
+                if input_shape.ndims == 4:
+                    dim = 1
+                    for d in input_shape[1:].as_list():
+                        dim *= d
+                #    feed_in = tf.reshape(tf.transpose(input,[0,3,1,2]), [-1, dim])
+                else:
+                    feed_in, dim = (input, int(input_shape[-1]))
 
-        weights = self.make_var('weights', [dim, num_out], init_weights)
-        biases = self.make_var('biases', [num_out], init_biases)
-        
-        acol = tf.nn.xw_plus_b(input,weights,biases,name=name)
-        return acol
-    
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.01)
+                init_biases = tf.constant_initializer(1.0)#(0.1)
+
+                weights = self.make_var('weights', [dim, clust_count], init_weights)
+                biases = self.make_var('biases', [clust_count], init_biases)
+
+                acol = tf.nn.xw_plus_b(input,weights,biases,name=newname)
+                acolLayers.append(acol)
+        return acolLayers
+
     @layer
     def matrix_softmax(self,input,name):
         shape = input.get_shape().as_list()
         shape[0] = int(-1)
-        return tf.reshape(tf.nn.softmax(tf.contrib.layers.flatten(x)),shape,name=name)
-        
+        return tf.reshape(tf.nn.softmax(tf.contrib.layers.flatten(input)),shape,name=name)
+
     @layer
     def redMax(self,input,name):
-        tf.reduce_max(input,2,name=name)
+        return tf.reduce_max(input,2,name=name)

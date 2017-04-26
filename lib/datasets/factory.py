@@ -77,11 +77,14 @@ for split in ['71', '370']:
             datasets.nthu(split))
 
 
-def get_imdb(name):
+def get_imdb(name,small=False):
     """Get an imdb (image database) by name."""
     if not __sets.has_key(name):
         raise KeyError('Unknown dataset: {}'.format(name))
-    return __sets[name]()
+    imdb = __sets[name]()
+    if small:
+        imdb.smallimgindex()
+    return imdb
 
 def list_imdbs():
     """List all registered imdbs."""

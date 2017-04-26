@@ -8,4 +8,4 @@
 from . import config
 from . import train
 from . import test
-from . import mnistTrain
+from . import train_simple

@@ -15,6 +15,7 @@ export PYTHONUNBUFFERED="True"
 
 DEV=$1
 DEV_ID=$2
+ITERS=$3
 
 array=( $@ )
 len=${#array[@]}
@@ -27,7 +28,7 @@ echo Logging output to "$LOG"
 
 time python ./tools/mnisttrain_net.py --device ${DEV} --device_id ${DEV_ID} \
   --iters ${ITERS} \
-  --network ACOLmnistTrain \
+  --network mnistnet \
   ${EXTRA_ARGS}
 
 set +x

@@ -44,7 +44,7 @@ def _filter_crowd_proposals(roidb, crowd_thresh):
     return roidb
 
 class coco(imdb):
-    def __init__(self, image_set, year, small=False):
+    def __init__(self, image_set, year):
         imdb.__init__(self, 'coco_' + year + '_' + image_set)
         # COCO specific config options
         self.config = {'top_k' : 2000,
@@ -64,7 +64,7 @@ class coco(imdb):
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._class_to_coco_cat_id = dict(zip([c['name'] for c in cats],
                                               self._COCO.getCatIds()))
-        self._image_index = self._load_image_set_index(small)
+        self._image_index = self._load_image_set_index()
         # Default to roidb handler
         #self.set_proposal_method('selective_search')
         self._roidb_handler = self.gt_roidb
@@ -85,25 +85,17 @@ class coco(imdb):
         # do not have gt annotations)
         self._gt_splits = ('train', 'val', 'minival')
 
-    def smallimgindex(self):
-        self._image_index = self._load_image_set_index(True)
-
     def _get_ann_file(self):
         prefix = 'instances' if self._image_set.find('test') == -1 \
                              else 'image_info'
         return osp.join(self._data_path, 'annotations',
                         prefix + '_' + self._image_set + self._year + '.json')
 
-    def _load_image_set_index(self,small = False, class_ids=[40]):
+    def _load_image_set_index(self):
         """
         Load image ids.
         """
         image_ids = self._COCO.getImgIds()
-        if small:
-            image_ids = image_ids[:100]
-        if len(class_ids)>0:
-            print 'selecting categories!'
-            print self._COCO.getCatIds()
         return image_ids
 
     def _get_widths(self):
@@ -346,33 +338,20 @@ class coco(imdb):
 
     def _coco_results_one_category(self, boxes, cat_id):
         results = []
-        acol = False
         for im_ind, index in enumerate(self.image_index):
             dets = boxes[im_ind].astype(np.float)
             if dets == []:
                 continue
             scores = dets[:, -1]
-            if dets.shape[1] > 5:
-                softmaxMat = dets[:,-1]
-                scores = dets[:,4]
-                acol=True
             xs = dets[:, 0]
             ys = dets[:, 1]
             ws = dets[:, 2] - xs + 1
             hs = dets[:, 3] - ys + 1
-            if not acol:
-                results.extend(
-                  [{'image_id' : index,
-                    'category_id' : cat_id,
-                    'bbox' : [xs[k], ys[k], ws[k], hs[k]],
-                    'score' : scores[k]} for k in xrange(dets.shape[0])])
-            else:
-                results.extend(
-                  [{'image_id' : index,
-                    'category_id' : cat_id,
-                    'bbox' : [xs[k], ys[k], ws[k], hs[k]],
-                    'score' : scores[k],
-                    'cluster' : softmaxMat[k]} for k in xrange(dets.shape[0])])
+            results.extend(
+              [{'image_id' : index,
+                'category_id' : cat_id,
+                'bbox' : [xs[k], ys[k], ws[k], hs[k]],
+                'score' : scores[k]} for k in xrange(dets.shape[0])])
         return results
 
     def _write_coco_results_file(self, all_boxes, res_file):
@@ -407,8 +386,7 @@ class coco(imdb):
             self._do_detection_eval(res_file, output_dir)
         # Optionally cleanup results json file
         if self.config['cleanup']:
-            print 'It better not have been doing this the entire time!!'
-            #os.remove(res_file)
+            os.remove(res_file)
 
     def competition_mode(self, on):
         if on:

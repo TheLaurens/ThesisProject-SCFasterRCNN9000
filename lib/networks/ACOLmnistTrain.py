@@ -17,7 +17,7 @@ class ACOLmnistTrain(Network):
         self.im_info = tf.placeholder(tf.float32, shape=[None, 3])
 #        self.gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
         self.keep_prob = tf.placeholder(tf.float32)
-        self.layers = dict({'data':self.data, 'im_info':self.im_info})#, 'gt_boxes':self.gt_boxes})
+        self.layers = dict({'data':self.data, 'im_info':self.im_info,'x_image':self.x_image})#, 'gt_boxes':self.gt_boxes})
         self.trainable = trainable
         self.setup()
 
@@ -34,24 +34,42 @@ class ACOLmnistTrain(Network):
 
     def setup(self):
         (self.feed('x_image')
-             .conv(5, 5, 1, 32, name='conv1_1')
+             .conv(5, 5, 32, 1, 1, name='conv1_1')
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool1')
-             .conv(5, 5, 32, 64, name='conv2_1')
+             .conv(5, 5, 64, 1, 1, name='conv2_1')
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool2'))
              
         (self.feed('pool2')
-             .reshape_layer([-1, 7*7*64], name='flat1')
+             .reshape_noFluff([-1,7*7*64], name='flat1')
              .fc(1024, name='fc7')
              .dropout(0.3, name='drop7'))
         
         (self.feed('drop7')
-             .acol(self.clustcount, name='clust1'))
-        (self.feed('drop7')
-             .acol(self.clustcount, name='clust2'))
+             .acol(n_clusters, n_classes, name='clustering'))
         
-        (self.feed('clust1','clust2')
-             .concat(name='stackedClusts')
+        (self.feed('clustering')
+             .stck(1,name='stackedClusts')
              .matrix_softmax(name='softmaxMat')
              .redMax(name='smStacked'))
+    
+    def xsetup(self):
+        (self.feed('x_image')
+             .conv(3, 3, 32, 1, 1, name='conv1_1')
+             .conv(3, 3, 32, 1, 1, name='conv1_2')
+             .max_pool(2, 2, 2, 2, padding='VALID', name='pool2')
+             .dropout(0.25, name='drop1')
+             .conv(3,3,64,1,1, name='conv2_1')
+             .conv(3,3,64,1,1, name='conv2_2')
+             .max_pool(2,2,2,2, padding='VALID', name='pool2_2')
+             .dropout(0.25, name='drop2')
+             .reshape_noFluff([-1,7*7*64], name='flat1')
+             .fc(2048, name='fc7')
+             .dropout(0.5, name='drop2'))
         
+        (self.feed('drop2')
+             .acol(n_clusters, n_classes, name='clustering'))
         
+        (self.feed('clustering')
+             .stck(1,name='stackedClusts')
+             .matrix_softmax(name='softmaxMat')
+             .redMax(name='smStacked'))

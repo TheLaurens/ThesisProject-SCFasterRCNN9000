@@ -131,7 +131,7 @@ def _rescale_boxes(boxes, inds, scales):
     return boxes
 
 
-def im_detect(sess, net, im, boxes=None):
+def im_detect(sess, net, im, boxes=None, store_clusters=False):
     """Detect object classes in an image given object proposals.
     Arguments:
         net (caffe.Net): Fast R-CNN network to use
@@ -144,7 +144,7 @@ def im_detect(sess, net, im, boxes=None):
     """
 
     blobs, im_scales = _get_blobs(im, boxes)
-
+    softmaxMat=[]
     # When mapping from image ROIs to feature map ROIs, there's some aliasing
     # (some distinct image ROIs get mapped to the same feature ROI).
     # Here, we identify duplicate feature ROIs, so we only compute features
@@ -173,8 +173,13 @@ def im_detect(sess, net, im, boxes=None):
     if cfg.TEST.DEBUG_TIMELINE:
         run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         run_metadata = tf.RunMetadata()
-
-    features_fc7, patches_pool5, cls_score, cls_prob, bbox_pred, rois = sess.run([net.get_output('fc7'), net.get_output('pool_5'), net.get_output('cls_score'), net.get_output('cls_prob'), net.get_output('bbox_pred'),net.get_output('rois')],
+    if not store_clusters:
+        features_fc7, patches_pool5, cls_prob, bbox_pred, rois = sess.run([net.get_output('fc7'), net.get_output('pool_5'), net.get_output('smStacked'), net.get_output('bbox_pred'),net.get_output('rois')],
+                                                    feed_dict=feed_dict,
+                                                    options=run_options,
+                                                    run_metadata=run_metadata)
+    else:
+        features_fc7, patches_pool5, cls_prob, bbox_pred, rois, softmaxMat = sess.run([net.get_output('fc7'), net.get_output('pool_5'), net.get_output('smStacked'), net.get_output('bbox_pred'),net.get_output('rois'),net.get_output('softmaxMat')],
                                                     feed_dict=feed_dict,
                                                     options=run_options,
                                                     run_metadata=run_metadata)
@@ -187,6 +192,7 @@ def im_detect(sess, net, im, boxes=None):
     if cfg.TEST.SVM:
         # use the raw scores before softmax under the assumption they
         # were trained as linear SVMs
+        print('WELL I did not really want this to happen sooo.....')
         scores = cls_score
     else:
         # use softmax estimated probabilities
@@ -205,14 +211,16 @@ def im_detect(sess, net, im, boxes=None):
         # Map scores and predictions back to the original set of boxes
         scores = scores[inv_index, :]
         pred_boxes = pred_boxes[inv_index, :]
+        if store_clusters:
+            softmaxMat = softmaxMat[inv_index,:,:]
 
     if cfg.TEST.DEBUG_TIMELINE:
         trace = timeline.Timeline(step_stats=run_metadata.step_stats)
         trace_file = open(str(long(time.time() * 1000)) + '-test-timeline.ctf.json', 'w')
         trace_file.write(trace.generate_chrome_trace_format(show_memory=False))
         trace_file.close()
-
-    return scores, pred_boxes, features_fc7, patches_pool5
+    
+    return scores, pred_boxes, features_fc7, patches_pool5, softmaxMat
 
 
 def vis_detections(im, class_name, dets, thresh=0.8):
@@ -270,7 +278,7 @@ def apply_nms(all_boxes, thresh):
     return nms_boxes
 
 
-def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05, vis=False, save_features=False):
+def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05, vis=False, save_features=False, store_clusters=False):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
     # all detections are collected into:
@@ -310,7 +318,7 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
 
         im = cv2.imread(imdb.image_path_at(i))
         _t['im_detect'].tic()
-        scores, boxes, features_fc7, patches_pool5 = im_detect(sess, net, im, box_proposals)
+        scores, boxes, features_fc7, patches_pool5, softmaxMat = im_detect(sess, net, im, box_proposals,store_clusters=store_clusters)
         _t['im_detect'].toc()
 
         _t['misc'].tic()
@@ -337,6 +345,10 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
             cls_boxes = boxes[inds, j*4:(j+1)*4]
             cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])) \
                 .astype(np.float32, copy=False)
+            if store_clusters:
+                cls_softmaxMat = softmaxMat[inds,j,:]
+                cls_dets = np.hstack((cls_dets, np.argmax(cls_softmaxMat,axis=1)[:, np.newaxis])) \
+                .astype(np.float32, copy=False)
             keep = nms(cls_dets, cfg.TEST.NMS)
             cls_dets = cls_dets[keep, :]
 
@@ -354,7 +366,7 @@ def test_net(sess, net, imdb, weights_filename , max_per_image=300, thresh=0.05,
                 vis_detections(image, imdb.classes[j], cls_dets)
             all_boxes[j][i] = cls_dets
         if vis:
-           plt.show()
+            plt.show()
         # Limit to max_per_image detections *over all classes*
         if max_per_image > 0:
             image_scores = np.hstack([all_boxes[j][i][:, -1]
