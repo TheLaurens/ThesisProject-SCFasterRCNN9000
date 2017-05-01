@@ -319,6 +319,37 @@ class Network(object):
         return acolLayers
 
     @layer
+    def biggerAcol(self,input,clust_count, class_count,name):
+        acolLayers = []
+        for i in range(class_count):
+            newname = name+'_'+str(i)
+            with tf.variable_scope(newname) as scope:
+                if isinstance(input, tuple):
+                        input = input[0]
+
+                #I don't know what this bit does, but I don't think it'll hurt anything
+                #Or maybe it does, who knows
+                input_shape = input.get_shape()
+                if input_shape.ndims == 4:
+                    dim = 1
+                    for d in input_shape[1:].as_list():
+                        dim *= d
+                #    feed_in = tf.reshape(tf.transpose(input,[0,3,1,2]), [-1, dim])
+                else:
+                    feed_in, dim = (input, int(input_shape[-1]))
+
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.01)
+                init_biases = tf.constant_initializer(1.0)#(0.1)
+
+                weights = self.make_var('weights', [dim, clust_count], init_weights)
+                biases = self.make_var('biases', [clust_count], init_biases)
+
+                fc7 = self.fc(input,4096,name=newname+'_fc')
+                acol = tf.nn.xw_plus_b(fc7,weights,biases,name=newname)
+                acolLayers.append(acol)
+        return acolLayers
+
+    @layer
     def matrix_softmax(self,input,name):
         shape = input.get_shape().as_list()
         shape[0] = int(-1)

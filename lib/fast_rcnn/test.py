@@ -219,7 +219,7 @@ def im_detect(sess, net, im, boxes=None, store_clusters=False):
         trace_file = open(str(long(time.time() * 1000)) + '-test-timeline.ctf.json', 'w')
         trace_file.write(trace.generate_chrome_trace_format(show_memory=False))
         trace_file.close()
-    
+
     return scores, pred_boxes, features_fc7, patches_pool5, softmaxMat
 
 
