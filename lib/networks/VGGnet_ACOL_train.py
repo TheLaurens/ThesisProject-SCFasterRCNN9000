@@ -4,8 +4,8 @@ from networks.network import Network
 
 #define
 
-n_classes = 81
-clustcount = 10
+n_classes = 21
+clustcount = 5
 _feat_stride = [16,]
 anchor_scales = [8, 16, 32]
 
@@ -39,21 +39,21 @@ class VGGnet_ACOL_train(Network):
              .conv(3, 3, 128, 1, 1, name='conv2_1', trainable=False)
              .conv(3, 3, 128, 1, 1, name='conv2_2', trainable=False)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool2')
-             .conv(3, 3, 256, 1, 1, name='conv3_1', trainable=False)
-             .conv(3, 3, 256, 1, 1, name='conv3_2', trainable=False)
-             .conv(3, 3, 256, 1, 1, name='conv3_3', trainable=False)
+             .conv(3, 3, 256, 1, 1, name='conv3_1', trainable=True)
+             .conv(3, 3, 256, 1, 1, name='conv3_2', trainable=True)
+             .conv(3, 3, 256, 1, 1, name='conv3_3', trainable=True)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool3')
-             .conv(3, 3, 512, 1, 1, name='conv4_1', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv4_2', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv4_3', trainable=False)
+             .conv(3, 3, 512, 1, 1, name='conv4_1', trainable=True)
+             .conv(3, 3, 512, 1, 1, name='conv4_2', trainable=True)
+             .conv(3, 3, 512, 1, 1, name='conv4_3', trainable=True)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool4')
-             .conv(3, 3, 512, 1, 1, name='conv5_1', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv5_2', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv5_3', trainable=False))
+             .conv(3, 3, 512, 1, 1, name='conv5_1', trainable=True)
+             .conv(3, 3, 512, 1, 1, name='conv5_2', trainable=True)
+             .conv(3, 3, 512, 1, 1, name='conv5_3', trainable=True))
         #========= RPN ============
         (self.feed('conv5_3')
-             .conv(3,3,512,1,1,name='rpn_conv/3x3', trainable=False)
-             .conv(1,1,len(anchor_scales)*3*2 ,1 , 1, padding='VALID', relu = False, name='rpn_cls_score', trainable=False))
+             .conv(3,3,512,1,1,name='rpn_conv/3x3', trainable=True)
+             .conv(1,1,len(anchor_scales)*3*2 ,1 , 1, padding='VALID', relu = False, name='rpn_cls_score', trainable=True))
 
         (self.feed('rpn_cls_score','gt_boxes','im_info','data')
              .anchor_target_layer(_feat_stride, anchor_scales, name = 'rpn-data' ))
@@ -61,7 +61,7 @@ class VGGnet_ACOL_train(Network):
         # Loss of rpn_cls & rpn_boxes
 
         (self.feed('rpn_conv/3x3')
-             .conv(1,1,len(anchor_scales)*3*4, 1, 1, padding='VALID', relu = False, name='rpn_bbox_pred',trainable=False))
+             .conv(1,1,len(anchor_scales)*3*4, 1, 1, padding='VALID', relu = False, name='rpn_bbox_pred',trainable=True))
 
         #========= RoI Proposal ============
         (self.feed('rpn_cls_score')
@@ -85,10 +85,11 @@ class VGGnet_ACOL_train(Network):
              .dropout(0.5, name='drop6')
              .fc(4096, name='fc7', trainable=True)
              .dropout(0.5, name='drop7'))
-        
-        (self.feed('drop7')
+
+        (self.feed('fc6')
+             #.reshape_noFluff([-1,7*7*512],name='flatPool5')
              .acol(clustcount, n_classes, name='clustering'))
-        
+
         (self.feed('clustering')
              .stck(1,name='stackedClusts')
              .matrix_softmax(name='softmaxMat')

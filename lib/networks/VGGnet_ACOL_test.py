@@ -1,8 +1,9 @@
 import tensorflow as tf
 from networks.network import Network
 
-n_classes = 81
-clustcount = 10
+
+n_classes = 21
+clustcount = 5
 _feat_stride = [16,]
 anchor_scales = [8, 16, 32] 
 
@@ -58,7 +59,8 @@ class VGGnet_ACOL_test(Network):
              .fc(4096, name='fc6')
              .fc(4096, name='fc7'))
 
-        (self.feed('fc7')
+        (self.feed('fc6')
+	     #.reshape_noFluff([-1,7*7*512],name='flatPool5')
              .acol(clustcount, n_classes, name='clustering'))
         
         (self.feed('clustering')

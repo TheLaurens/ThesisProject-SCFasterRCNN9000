@@ -131,7 +131,7 @@ def _rescale_boxes(boxes, inds, scales):
     return boxes
 
 
-def im_detect(sess, net, im, boxes=None, store_clusters=False):
+def im_detect(sess, net, im, boxes=None, store_clusters=True):
     """Detect object classes in an image given object proposals.
     Arguments:
         net (caffe.Net): Fast R-CNN network to use

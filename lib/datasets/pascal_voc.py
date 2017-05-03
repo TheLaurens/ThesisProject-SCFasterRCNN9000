@@ -19,7 +19,8 @@ import uuid
 from voc_eval import voc_eval
 from fast_rcnn.config import cfg
 import pdb
-
+import os.path as osp
+import json
 
 class pascal_voc(imdb):
     def __init__(self, image_set, year, devkit_path=None):
@@ -260,6 +261,55 @@ class pascal_voc(imdb):
                                        dets[k, 0] + 1, dets[k, 1] + 1,
                                        dets[k, 2] + 1, dets[k, 3] + 1))
 
+    def _pascal_results_one_category(self, boxes, cat_id):
+        results = []
+        acol = False
+        for im_ind, index in enumerate(self.image_index):
+            dets = boxes[im_ind].astype(np.float)
+            if dets == []:
+                continue
+            scores = dets[:, -1]
+            if dets.shape[1] > 5:
+                softmaxMat = dets[:,-1]
+                scores = dets[:,4]
+                acol=True
+            xs = dets[:, 0]
+            ys = dets[:, 1]
+            ws = dets[:, 2] - xs + 1
+            hs = dets[:, 3] - ys + 1
+            if not acol:
+                results.extend(
+                  [{'image_id' : index,
+                    'category_id' : cat_id,
+                    'bbox' : [xs[k], ys[k], ws[k], hs[k]],
+                    'score' : scores[k]} for k in xrange(dets.shape[0])])
+            else:
+                results.extend(
+                  [{'image_id' : index,
+                    'category_id' : cat_id,
+                    'bbox' : [xs[k], ys[k], ws[k], hs[k]],
+                    'score' : scores[k],
+                    'cluster' : softmaxMat[k]} for k in xrange(dets.shape[0])])
+        return results
+
+    def _write_pascal_results_file(self, all_boxes, res_file):
+        # [{"image_id": 42,
+        #   "category_id": 18,
+        #   "bbox": [258.15,41.29,348.26,243.78],
+        #   "score": 0.236}, ...]
+        results = []
+        for cls_ind, cls in enumerate(self.classes):
+            if cls == '__background__':
+                continue
+            print 'Collecting {} results ({:d}/{:d})'.format(cls, cls_ind,
+                                                          self.num_classes - 1)
+            pascal_cat_id = cls
+            results.extend(self._pascal_results_one_category(all_boxes[cls_ind],
+                                                           pascal_cat_id))
+        print 'Writing results json to {}'.format(res_file)
+        with open(res_file, 'w') as fid:
+            json.dump(results, fid)
+
     def _do_python_eval(self, output_dir = 'output'):
         annopath = os.path.join(
             self._devkit_path,
@@ -323,6 +373,16 @@ class pascal_voc(imdb):
     def evaluate_detections(self, all_boxes, output_dir):
         self._write_voc_results_file(all_boxes)
         self._do_python_eval(output_dir)
+
+        res_file = osp.join(output_dir, ('detections_' +
+                                         self._image_set +
+                                         '2007' +
+                                         '_results'))
+        res_file += '_{}'.format(str(uuid.uuid4()))
+        res_file += '.json'
+        print res_file
+        self._write_pascal_results_file(all_boxes, res_file)
+
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:

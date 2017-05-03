@@ -71,4 +71,5 @@ time python ./tools/test_net.py --device ${DEV} --device_id ${DEV_ID} \
   --cfg experiments/cfgs/faster_rcnn_end2end.yml \
   --network VGGnet_ACOL_test \
   --save_clusters True \
+  --comp
   ${EXTRA_ARGS}

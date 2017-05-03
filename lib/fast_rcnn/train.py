@@ -67,7 +67,7 @@ class SolverWrapper(object):
         infix = ('_' + cfg.TRAIN.SNAPSHOT_INFIX
                  if cfg.TRAIN.SNAPSHOT_INFIX != '' else '')
         filename = (cfg.TRAIN.SNAPSHOT_PREFIX + infix +
-                    '_iter_{:d}'.format(iter+1) + '2.ckpt') #NOTE!!! I ADDED A 2 HERE TO PREVENT OVERWRITING
+                    '_iter_{:d}'.format(iter+1) + '.ckpt')
         filename = os.path.join(self.output_dir, filename)
 
         self.saver.save(sess, filename)
@@ -170,7 +170,7 @@ class SolverWrapper(object):
         loss_box = tf.reduce_mean(tf.reduce_sum(smooth_l1, reduction_indices=[1]))
 
         #ACOL loss
-        tresh = tf.constant(0.1)
+        tresh = tf.constant(0.03)
         cc1=1.0
         cc2=1.0
         cc3=0.0003
@@ -199,13 +199,13 @@ class SolverWrapper(object):
 
         # optimizer and learning rate
         global_step = tf.Variable(0, trainable=False)
-        cfg.TRAIN.LEARNING_RATE = 1e-5
+        #cfg.TRAIN.LEARNING_RATE = 1e-5
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
-        #train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
+        train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
 
-        train_op = tf.train.AdamOptimizer(1e-5).minimize(loss)
+        #train_op = tf.train.AdamOptimizer(1e-5).minimize(loss)
 
         # iintialize variables
         sess.run(tf.global_variables_initializer())

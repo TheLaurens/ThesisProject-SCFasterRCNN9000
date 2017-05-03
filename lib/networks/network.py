@@ -109,8 +109,8 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name) as scope:
 
-            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1) #NOTE!!:(0.0, stddev=0.01)
-            init_biases = tf.constant_initializer(1.0)#NOTE!!:(0.0)
+            init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01) #NOTE!!:(0.0, stddev=0.1)
+            init_biases = tf.constant_initializer(1.0)#NOTE!!:(1.0)
             kernel = self.make_var('weights', [k_h, k_w, c_i/group, c_o], init_weights, trainable)
             biases = self.make_var('biases', [c_o], init_biases, trainable)
 
@@ -263,11 +263,11 @@ class Network(object):
                 feed_in, dim = (input, int(input_shape[-1]))
 
             if name == 'bbox_pred':
-                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.001)
-                init_biases = tf.constant_initializer(1.0)#(0.0)
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.001)#(0.0, stddev=0.001)
+                init_biases = tf.constant_initializer(0.0)#(0.0)
             else:
-                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.1)#(0.0, stddev=0.01)
-                init_biases = tf.constant_initializer(1.0)#(0.0)
+                init_weights = tf.truncated_normal_initializer(0.0, stddev=0.01)#(0.0, stddev=0.01)
+                init_biases = tf.constant_initializer(0.0)#(0.0)
 
             weights = self.make_var('weights', [dim, num_out], init_weights, trainable)
             biases = self.make_var('biases', [num_out], init_biases, trainable)
@@ -344,8 +344,8 @@ class Network(object):
                 weights = self.make_var('weights', [dim, clust_count], init_weights)
                 biases = self.make_var('biases', [clust_count], init_biases)
 
-                fc7 = self.fc(input,4096,name=newname+'_fc')
-                acol = tf.nn.xw_plus_b(fc7,weights,biases,name=newname)
+                #fc7 = self.fc(input,4096,name=newname+'_fc')
+                acol = tf.nn.xw_plus_b(input,weights,biases,name=newname)
                 acolLayers.append(acol)
         return acolLayers
 
