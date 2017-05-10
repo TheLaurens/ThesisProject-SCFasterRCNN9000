@@ -38,18 +38,21 @@ def prepare_roidb(imdb):
         roidb[i]['image'] = imdb.image_path_at(i)
         boxes = roidb[i]['boxes']
         labels = roidb[i]['gt_classes']
+
+        #labels = roidb[i]['gt_supclasses'] #NOTE
+
         info_boxes = np.zeros((0, 18), dtype=np.float32)
 
         if boxes.shape[0] == 0:
             roidb[i]['info_boxes'] = info_boxes
             continue
 
-        # compute grid boxes
+        # compute grid boxes``
         s = PIL.Image.open(imdb.image_path_at(i)).size
         image_height = s[1]
         image_width = s[0]
         boxes_grid, cx, cy = get_boxes_grid(image_height, image_width)
-        
+
         # for each scale
         for scale_ind, scale in enumerate(cfg.TRAIN.SCALES):
             boxes_rescaled = boxes * scale

@@ -4,12 +4,12 @@ from networks.network import Network
 
 #define
 
-n_classes = 3
-clustcount = 6
+n_classes = 21
+clustcount = 5
 _feat_stride = [16,]
 anchor_scales = [8, 16, 32]
 
-class VGGnet_ACOL_train(Network):
+class VGGnet_ACOL_train_onlyACOL(Network):
     def __init__(self, trainable=True):
         self.inputs = []
         self.data = tf.placeholder(tf.float32, shape=[None, None, None, 3])
@@ -39,13 +39,13 @@ class VGGnet_ACOL_train(Network):
              .conv(3, 3, 128, 1, 1, name='conv2_1', trainable=False)
              .conv(3, 3, 128, 1, 1, name='conv2_2', trainable=False)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool2')
-             .conv(3, 3, 256, 1, 1, name='conv3_1')
-             .conv(3, 3, 256, 1, 1, name='conv3_2')
-             .conv(3, 3, 256, 1, 1, name='conv3_3')
+             .conv(3, 3, 256, 1, 1, name='conv3_1', trainable=False)
+             .conv(3, 3, 256, 1, 1, name='conv3_2', trainable=False)
+             .conv(3, 3, 256, 1, 1, name='conv3_3', trainable=False)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool3')
-             .conv(3, 3, 512, 1, 1, name='conv4_1')
-             .conv(3, 3, 512, 1, 1, name='conv4_2')
-             .conv(3, 3, 512, 1, 1, name='conv4_3')
+             .conv(3, 3, 512, 1, 1, name='conv4_1', trainable=False)
+             .conv(3, 3, 512, 1, 1, name='conv4_2', trainable=False)
+             .conv(3, 3, 512, 1, 1, name='conv4_3', trainable=False)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool4')
              .conv(3, 3, 512, 1, 1, name='conv5_1')
              .conv(3, 3, 512, 1, 1, name='conv5_2')
@@ -96,4 +96,4 @@ class VGGnet_ACOL_train(Network):
              .redMax(name='smStacked'))
 
         (self.feed('drop7')
-             .fc(n_classes*4, relu=False, name='bbox_pred'))
+             .fc(n_classes*4, relu=False, name='bbox_pred', trainable=False))

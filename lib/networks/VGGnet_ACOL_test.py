@@ -2,8 +2,8 @@ import tensorflow as tf
 from networks.network import Network
 
 
-n_classes = 21
-clustcount = 5
+n_classes = 3
+clustcount = 6
 _feat_stride = [16,]
 anchor_scales = [8, 16, 32] 
 
@@ -25,17 +25,17 @@ class VGGnet_ACOL_test(Network):
              .conv(3, 3, 128, 1, 1, name='conv2_1', trainable=False)
              .conv(3, 3, 128, 1, 1, name='conv2_2', trainable=False)
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool2')
-             .conv(3, 3, 256, 1, 1, name='conv3_1', trainable=False)
-             .conv(3, 3, 256, 1, 1, name='conv3_2', trainable=False)
-             .conv(3, 3, 256, 1, 1, name='conv3_3', trainable=False)
+             .conv(3, 3, 256, 1, 1, name='conv3_1')
+             .conv(3, 3, 256, 1, 1, name='conv3_2')
+             .conv(3, 3, 256, 1, 1, name='conv3_3')
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool3')
-             .conv(3, 3, 512, 1, 1, name='conv4_1', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv4_2', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv4_3', trainable=False)
+             .conv(3, 3, 512, 1, 1, name='conv4_1')
+             .conv(3, 3, 512, 1, 1, name='conv4_2')
+             .conv(3, 3, 512, 1, 1, name='conv4_3')
              .max_pool(2, 2, 2, 2, padding='VALID', name='pool4')
-             .conv(3, 3, 512, 1, 1, name='conv5_1', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv5_2', trainable=False)
-             .conv(3, 3, 512, 1, 1, name='conv5_3', trainable=False))
+             .conv(3, 3, 512, 1, 1, name='conv5_1')
+             .conv(3, 3, 512, 1, 1, name='conv5_2')
+             .conv(3, 3, 512, 1, 1, name='conv5_3'))
 
         (self.feed('conv5_3')
              .conv(3,3,512,1,1,name='rpn_conv/3x3')
@@ -59,8 +59,8 @@ class VGGnet_ACOL_test(Network):
              .fc(4096, name='fc6')
              .fc(4096, name='fc7'))
 
-        (self.feed('fc6')
-	     #.reshape_noFluff([-1,7*7*512],name='flatPool5')
+        (self.feed('pool_5')
+             .reshape_noFluff([-1,7*7*512],name='flatPool5')
              .acol(clustcount, n_classes, name='clustering'))
         
         (self.feed('clustering')

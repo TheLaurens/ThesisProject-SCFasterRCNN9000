@@ -199,13 +199,13 @@ class SolverWrapper(object):
 
         # optimizer and learning rate
         global_step = tf.Variable(0, trainable=False)
-        #cfg.TRAIN.LEARNING_RATE = 1e-5
+        #cfg.TRAIN.LEARNING_RATE = 1e-3
         lr = tf.train.exponential_decay(cfg.TRAIN.LEARNING_RATE, global_step,
                                         cfg.TRAIN.STEPSIZE, 0.1, staircase=True)
         momentum = cfg.TRAIN.MOMENTUM
-        train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
+        #train_op = tf.train.MomentumOptimizer(lr, momentum).minimize(loss, global_step=global_step)
 
-        #train_op = tf.train.AdamOptimizer(1e-5).minimize(loss)
+        train_op = tf.train.AdamOptimizer(1e-5).minimize(loss)
 
         # iintialize variables
         sess.run(tf.global_variables_initializer())
@@ -247,6 +247,11 @@ class SolverWrapper(object):
 
             if (iter+1) % (cfg.TRAIN.DISPLAY) == 0:
                 print('==================================================')
+
+                #Debugging:
+                #pool_5_data = self.net.get_output('pool_5').eval(feed_dict=feed_dict)
+                #print pool_5_data
+
                 print 'iter: %d / %d, total loss: %.4f, rpn_loss_cls: %.4f, rpn_loss_box: %.4f, loss_cls: %.4f, loss_box: %.4f, lr: %f'%\
                         (iter+1, max_iters, rpn_loss_cls_value + rpn_loss_box_value + loss_cls_value + loss_box_value ,rpn_loss_cls_value, rpn_loss_box_value,loss_cls_value, loss_box_value, lr.eval())
                 aff = affinity.eval(feed_dict=feed_dict)
@@ -274,10 +279,13 @@ def get_training_roidb(imdb):
     print 'Preparing training data...'
     if cfg.TRAIN.HAS_RPN:
         if cfg.IS_MULTISCALE:
+            print 'this one'
             gdl_roidb.prepare_roidb(imdb)
         else:
+            print 'no this one'
             rdl_roidb.prepare_roidb(imdb)
     else:
+        print 'nvm, it this one'
         rdl_roidb.prepare_roidb(imdb)
     print 'done'
 
